@@ -10,8 +10,8 @@ from dataclasses import dataclass
 import gitlab
 from gitlab.v4.objects import ProjectMergeRequest
 
-from config import settings
-from models.Hunk import Hunk
+from review_bot.config import settings
+from review_bot.models.hunk import Hunk
 
 logger = logging.getLogger(__name__)
 
