@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any, Awaitable, Callable
 
 from agents import Agent, Runner, FunctionTool
 
@@ -13,28 +14,26 @@ from review_bot.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _to_function_tools(toolkit: ToolKit) -> list[FunctionTool]:
-    """ToolDefinition 리스트를 OpenAI FunctionTool로 변환한다."""
-    tools = []
-    for defn in toolkit.tools:
-        handler = defn.handler
-
-        async def _invoke(ctx, args_json: str, _handler=handler) -> str:
-            args = json.loads(args_json)
-            return await _handler(args)
-
-        ft = FunctionTool(
-            name=defn.name,
-            description=defn.description,
-            params_json_schema=defn.schema,
-            on_invoke_tool=_invoke,
-        )
-        tools.append(ft)
-    return tools
-
-
 class OpenAIAgentRunner:
     """OpenAI Agents SDK로 에이전트를 실행한다."""
+
+    @staticmethod
+    def _make_invoke(handler: Callable[[dict], Awaitable[str]]):
+        """ToolDefinition handler를 OpenAI on_invoke_tool 시그니처로 변환한다."""
+        async def invoke(ctx: Any, args_json: str) -> str:
+            return await handler(json.loads(args_json))
+        return invoke
+
+    def _to_tools(self, toolkit: ToolKit) -> list[FunctionTool]:
+        return [
+            FunctionTool(
+                name=defn.name,
+                description=defn.description,
+                params_json_schema=defn.schema,
+                on_invoke_tool=self._make_invoke(defn.handler),
+            )
+            for defn in toolkit.tools
+        ]
 
     async def run(
         self,
@@ -46,7 +45,7 @@ class OpenAIAgentRunner:
         agent = Agent(
             name="review-bot",
             instructions=system_prompt,
-            tools=_to_function_tools(toolkit),
+            tools=self._to_tools(toolkit),
             model=settings.openai_review_model,
         )
 

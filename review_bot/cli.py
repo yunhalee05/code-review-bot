@@ -40,7 +40,7 @@ def review(
     ),
     repo_root: Path = typer.Option(
         ".", "--repo-root", "-r",
-        help="Local repository root path for codebase search",
+        help="Local repository root path (source branch checkout)",
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v",

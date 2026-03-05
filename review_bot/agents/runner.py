@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from review_bot.config import settings
 
@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 class AgentRunner(ABC):
     """에이전트 실행기의 공통 인터페이스."""
+
+    @abstractmethod
+    def _to_tools(self, toolkit: ToolKit) -> Any:
+        """ToolKit을 SDK 네이티브 도구 형식으로 변환한다."""
 
     @abstractmethod
     async def run(
@@ -36,11 +40,11 @@ class AgentRunner(ABC):
 
     async def identify_issues(self, hunk: Hunk) -> list[Issue]:
         """Stage 1: 단일 Hunk를 분석하여 잠재적 이슈 목록을 반환한다."""
-        from review_bot.tools.storage import IssueStorage, create_issue_toolkit
+        from review_bot.tools.storage import IssueStorage
         from review_bot.prompts.identify import IDENTIFY_SYSTEM_PROMPT, IDENTIFY_USER_PROMPT
 
         storage = IssueStorage(file_path=hunk.file_path)
-        toolkit = create_issue_toolkit(storage)
+        toolkit = storage.to_toolkit()
 
         prompt = IDENTIFY_USER_PROMPT.format(
             file_path=hunk.file_path,
@@ -62,14 +66,15 @@ class AgentRunner(ABC):
         return storage.issues
 
     async def validate_issue(self, issue: Issue, repo_root: Path) -> ValidatedIssue:
-        """Stage 2: 단일 이슈를 코드베이스 레퍼런스 기반으로 검증한다."""
+        """Stage 2: 단일 이슈를 로컬 코드베이스 기반으로 검증한다."""
         from review_bot.models.issue import ValidatedIssue
-        from review_bot.tools.storage import ValidationStorage, create_validation_toolkit
-        from review_bot.tools.codebase import create_codebase_toolkit
+        from review_bot.tools.storage import ValidationStorage
+        from review_bot.tools.codebase import CodebaseSearcher
         from review_bot.prompts.validate import VALIDATE_SYSTEM_PROMPT, VALIDATE_USER_PROMPT
 
         storage = ValidationStorage(issue=issue)
-        toolkit = create_validation_toolkit(storage).merge(create_codebase_toolkit(repo_root))
+        searcher = CodebaseSearcher(repo_root)
+        toolkit = storage.to_toolkit().merge(searcher.to_toolkit())
 
         prompt = VALIDATE_USER_PROMPT.format(
             file_path=issue.file_path,

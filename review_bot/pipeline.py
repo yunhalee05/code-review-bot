@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from review_bot.config import settings
 from review_bot.gitlab.client import GitLabClient, MRInfo
 from review_bot.gitlab.commenter import GitLabCommenter
 from review_bot.models.hunk import Hunk
@@ -96,7 +95,7 @@ async def run_review(
             issues_posted=0,
         )
 
-    # 3. Stage 2: Issue Validation (병렬)
+    # 3. Stage 2: Issue Validation (병렬, 로컬 코드베이스 기반)
     async def bounded_validate(issue: Issue) -> ValidatedIssue:
         async with semaphore:
             return await runner.validate_issue(issue, repo_root)
