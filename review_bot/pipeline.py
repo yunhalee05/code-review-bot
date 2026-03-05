@@ -15,8 +15,7 @@ from review_bot.gitlab.client import GitLabClient, MRInfo
 from review_bot.gitlab.commenter import GitLabCommenter
 from review_bot.models.hunk import Hunk
 from review_bot.models.issue import Issue, ValidatedIssue, Severity
-from review_bot.agents.identify import identify_issues
-from review_bot.agents.validate import validate_issue
+from review_bot.agents import get_runner
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +63,12 @@ async def run_review(
         )
 
     # 2. Stage 1: Issue Identification (병렬)
+    runner = get_runner()
     semaphore = asyncio.Semaphore(max_concurrent)
 
     async def bounded_identify(hunk: Hunk) -> list[Issue]:
         async with semaphore:
-            return await identify_issues(hunk)
+            return await runner.identify_issues(hunk)
 
     stage1_results = await asyncio.gather(
         *[bounded_identify(h) for h in hunks],
@@ -99,7 +99,7 @@ async def run_review(
     # 3. Stage 2: Issue Validation (병렬)
     async def bounded_validate(issue: Issue) -> ValidatedIssue:
         async with semaphore:
-            return await validate_issue(issue, repo_root)
+            return await runner.validate_issue(issue, repo_root)
 
     stage2_results = await asyncio.gather(
         *[bounded_validate(i) for i in all_issues],
